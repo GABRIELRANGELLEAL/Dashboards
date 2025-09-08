@@ -1,0 +1,8 @@
+ipykernel
+openai
+python-dotenv
+streamlit
+streamlit_webrtc
+pydub
+tabulate
+facebook-business
