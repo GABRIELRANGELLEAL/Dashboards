@@ -1,6 +1,0 @@
-ipykernel
-openai
-python-dotenv
-streamlit
-streamlit_webrtc
-pydub
