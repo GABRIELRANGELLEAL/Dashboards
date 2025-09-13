@@ -192,7 +192,7 @@ def create_report():
                             "role": "developer",
                             "content": f'''
                                 Você receberá no user input uma lista de dicionários contendo resultados de campanhas do cliente. 
-                                Atue como um **analista de marketing de dados sênior** e produza um **report estruturado em Markdown** no seguinte formato: 
+                                Atue como um analista de marketing de dados sênior e produza um report estruturado no seguinte formato: 
                                 📊 Reporte de Performance – Campanhas 
                                     1. Resumo Executivo  
                                         - 🔥 Destaque os **melhores desempenhos** (com métricas CTR, CPC, CPM, cliques) 
@@ -202,8 +202,8 @@ def create_report():
                                         - 🧪 Sugira **testes A/B práticos** (criativos, públicos, LPs, etc.) 
                                 Regras: 
                                     - Use métricas por criativo/adset/campanha quando fizer sentido. 
-                                    - Retorne **sempre formatado em Markdown**, com ícones e divisórias para ficar visual. 
                                     - O texto deve ter no máximo **2–3 blocos curtos por seção**.
+                                    - cuidado quando for usar R$, utilize a forma correta em markdown pra fazer moeda
                             '''
                         },
                         {
@@ -216,97 +216,10 @@ def create_report():
                     ],
                 )
                 st.subheader("Relatório")
-                st.text(resp.output_text)
+                st.markdown(resp.output_text)
 
             except Exception as e:
                 st.error(f"Erro ao gerar relatório: {e}")
-    #     elif not vs_id:
-    #         st.warning("Nenhum documento indexado nesta sessão. Vá para a aba 'Input your data' e suba arquivos.")
-    #         return
-
-    #     try:
-    #         resp = client.responses.create(
-    #             model="gpt-5-nano",  # modelo de texto compatível com tools
-    #             input=[
-    #                 {
-    #                     "role": "developer",
-    #                     "content": f"{developer_input}"
-    #                 },
-    #                 {
-    #                     "role": "user",
-    #                     "content": f"{user_input}"
-    #                 }
-    #             ],
-    #             tools=[{
-    #                 "type": "file_search",
-    #                 "vector_store_ids": [vs_id], 
-    #                 # opcional:
-    #                 # "max_num_results": 8,
-    #                 # "filters": {"type":"and","filters":[{"type":"eq","key":"author","value":"..."}]}
-    #             }]
-    #         )
-    #         st.subheader("Relatório")
-    #         st.write(resp.output_text)
-
-    #     except Exception as e:
-    #         st.error(f"Erro ao gerar relatório: {e}")
-    # # ----------------------------------------
-    # # chat
-    # # ----------------------------------------
-    # developer_input = 'Gere um resumo executivo (10 bullets) dos meus documentos e perguntas, com insights acionáveis'
-    
-    # user_input = st.text_area(
-    #     "Escreva sua pergunta/pedido:",
-    #     value="pergunte algo para o seus dados", # valor default 
-    #     height=140
-    # )
-
-def test_tab():
-    st.markdown(
-        """
-        # 📊 Reporte de Performance – Campanhas  
-
-        ---
-
-        ## 1. Resumo Executivo  
-
-        - 🔥 **Melhores desempenhos**
-        - **AD17 (LP02)** na campanha **Vendas BCP Quentes**  
-            - CTR ≈ **1,84%** (525 cliques / 28.570 impressões)  
-            - CPC ≈ **R$0,75** (R$392,94 / 525 cliques)  
-            - CPM ≈ **R$13,76**  
-        - **CTA BCP - 3 Erros mais comuns** na campanha **Vendas BCP Quentes**  
-            - CTR ≈ **1,99%** (255 cliques / 12.838 impressões)  
-            - CPC ≈ **R$0,69** (R$175,13 / 255 cliques)  
-            - CPM ≈ **R$13,64**  
-
-        - ❌ **Piores desempenhos**
-        - **AD03** na campanha **Vendas BCP Frios**  
-            - CTR ≈ **1,06%** (4 cliques / 378 impressões)  
-            - CPC ≈ **R$2,51** (R$10,06 / 4 cliques)  
-            - CPM ≈ **R$26,62**  
-        - **AD04** na campanha **Vendas BCP Frios**  
-            - CTR ≈ **1,40%** (5 cliques / 357 impressões)  
-            - CPC ≈ **R$1,70** (R$8,49 / 5 cliques)  
-            - CPM ≈ **R$23,78**  
-
-        ---
-
-        ## 2. Recomendações  
-
-        - 💰 **Alocação de Budget**  
-        - Investir mais em **AD17 (LP02)** e **CTA BCP - 3 Erros mais comuns** (alto CTR e CPC eficiente).  
-        - Reduzir investimento em criativos da linha **Frias** (baixa entrega e custo alto por clique).  
-
-        - 🧪 **Testes, ideias e melhorias**  
-        - **Criativos**: explorar novos formatos de vídeo com CTA mais claros (especialmente nas campanhas Frias).  
-        - **Públicos**: manter o target de engajados e seguidores, mas testar segmentações lookalike e de interesse complementar.  
-        - **Landing Pages**: otimizar LPs dos anúncios com baixo CTR, reforçando clareza da proposta e tempo de carregamento.  
-
-        ---
-        """
-
-    )
 
 # =========================================================
 # ========== Run App =========
@@ -314,13 +227,11 @@ def test_tab():
 
 def main():
     st.header('Mkt Analytics Tool')
-    tab1, tab2, tab3 = st.tabs(["Input your data", "Report and insights", "test"])
+    tab1, tab2 = st.tabs(["Input your data", "Report and insights"])
     with tab1:
         import_data()
     with tab2:
         create_report()
-    with tab3:
-        test_tab()
 
 if __name__ == '__main__':
     main()
