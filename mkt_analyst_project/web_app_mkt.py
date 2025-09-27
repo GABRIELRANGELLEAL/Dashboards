@@ -4,19 +4,23 @@ import json
 import io
 import openai
 import tabulate
+import requests
 import os
 from datetime import date
 from dotenv import load_dotenv, find_dotenv
 from  meta_adds_connect import insights_meta as im
 
-_ = load_dotenv(find_dotenv())
+_ = load_dotenv(find_dotenv(), override=True)
 
 APP_ID = os.getenv("META_APP_ID")
 APP_SECRET = os.getenv("META_APP_SECRET")
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 AD_ACCOUNT_ID = os.getenv("META_AD_ACCOUNT_ID")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+REDIRECT_URI = os.getenv("REDIRECT_URI")
 
-client = openai.OpenAI()
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+ 
 
 # =========================================================
 # ========== Helpers =========
@@ -87,11 +91,11 @@ def to_bytesio_with_name(uploaded) -> io.BytesIO:
 def import_data():
     st.subheader("Upload e Indexação")
     vs = client.vector_stores.create(name="docs_sessao_local")
-    st.write("Vector Store criado:", vs.id)
+    #st.write("Vector Store criado:", vs.id)
     st.session_state["vs_id"] = vs.id  # só guarda o ID
 
     uploaded_files = st.file_uploader(
-        "Escolha arquivos (PDF, CSV, Excel) — CSV/Excel serão convertidos para Markdown",
+        "Escolha arquivos (PDF, CSV, Excel, CSV)",
         type=["pdf", "csv", "xlsx", "xls"],
         accept_multiple_files=True
     )
@@ -129,6 +133,55 @@ def import_data():
                 except:
                     pass
         st.write(f"Resumo: Sucesso={success} | Falhas={failed}")
+    
+    ## faceadds connections
+
+    # 1) Monta a URL de autorização do Facebook (onde o usuário clica para logar/autorizar)
+    fb_auth_url = (
+        "https://www.facebook.com/v19.0/dialog/oauth"
+        f"?client_id={APP_ID}"             # ID do seu app no Facebook
+        f"&redirect_uri={REDIRECT_URI}"    # para onde o FB vai redirecionar depois do login
+        f"&scope=ads_read,ads_management"  # permissões solicitadas
+    )
+
+    # 2) Se ainda não temos token salvo na sessão, mostramos o link de "Conectar"
+    if "fb_token" not in st.session_state:
+        # Link clicável para o login/consentimento no Facebook
+        st.markdown(f"[🔗 Conectar ao Facebook Ads]({fb_auth_url})", unsafe_allow_html=True)
+
+        # 3) Ao voltar do Facebook, o navegador cai em REDIRECT_URI?code=...
+        #    Esse "code" vem como querystring; aqui a gente lê os query params.
+        params = st.query_params
+        if "code" in params:               # só segue se o Facebook devolveu "code"
+            code = params["code"][0]       # pega o primeiro valor (é uma lista)
+
+            # 4) Troca o "code" por um access_token na API do Graph
+            token_url = (
+                "https://graph.facebook.com/v19.0/oauth/access_token"
+                f"?client_id={APP_ID}"
+                f"&redirect_uri={REDIRECT_URI}"
+                f"&client_secret={APP_SECRET}"
+                f"&code={code}"
+            )
+
+            try:
+                # Chama a API para pegar o token
+                resp = requests.get(token_url).json()
+
+                # 5) Guarda o access_token na sessão do Streamlit
+                st.session_state["fb_token"] = resp["access_token"]
+
+                # Feedback visual para o usuário
+                st.success("✅ Conectado ao Facebook com sucesso!")
+            except Exception as e:
+                # Caso falhe (ex.: resp não tem "access_token" ou erro de rede)
+                st.error(f"Erro ao obter token: {e}")
+
+    else:
+        # 6) Se já temos token em sessão, só informamos o estado atual
+        st.success("✅ Já conectado ao Facebook Ads")
+        # Mostra só um pedaço do token para o usuário confirmar que existe
+        st.write("Access Token (parcial):", st.session_state["fb_token"][:40], "...")
 
 # =========================================================
 # ========== Aba Report e Insights =========
@@ -194,16 +247,15 @@ def create_report():
                                 Você receberá no user input uma lista de dicionários contendo resultados de campanhas do cliente. 
                                 Atue como um analista de marketing de dados sênior e produza um report estruturado no seguinte formato: 
                                 📊 Reporte de Performance – Campanhas 
-                                    1. Resumo Executivo  
-                                        - 🔥 Destaque os **melhores desempenhos** (com métricas CTR, CPC, CPM, cliques) 
-                                        - ❌ Destaque os **piores desempenhos** 
+                                    1. Resumo Executivo 
+                                        - 🔥 Destaque os **melhores desempenhos** (com métricas como CTR, CPC, CPM, cliques etc (coloque as métricas em bullet points)) 
+                                        - ❌ Destaque os **piores desempenhos** (com métricas como CTR, CPC, CPM, cliques etc (coloque as métricas em bullet points)) 
                                     2. Recomendações 
-                                        - 💰 Sugira **alocação de budget** (onde investir mais e onde reduzir no formato bullet points) 
-                                        - 🧪 Sugira **testes A/B práticos** (criativos, públicos, LPs, etc.) 
+                                        - 💰 Sugestões sobre **alocação de budget** (bullet points) 
+                                        - 🧪 Demais sugestões
                                 Regras: 
                                     - Use métricas por criativo/adset/campanha quando fizer sentido. 
-                                    - O texto deve ter no máximo **2–3 blocos curtos por seção**.
-                                    - cuidado quando for usar R$, utilize a forma correta em markdown pra fazer moeda
+                                    - cuidado quando for usar R$, não coloque o R$ coloque apenas valores
                             '''
                         },
                         {
@@ -218,8 +270,73 @@ def create_report():
                 st.subheader("Relatório")
                 st.markdown(resp.output_text)
 
+                # Ativa chat
+                st.session_state["chat_mode"] = True
+                st.session_state["dados"] = dados
+                st.session_state["relatorio"] = resp.output_text
+
+                # Inicializa histórico de conversa vazio (só para registrar iterações do chat)
+                if "messages" not in st.session_state:
+                    st.session_state["messages"] = []
+
             except Exception as e:
-                st.error(f"Erro ao gerar relatório: {e}")
+                    st.error(f"Erro ao gerar relatório: {e}")
+                    
+    # # --- Parte 2: Chat ---
+    if st.session_state.get("chat_mode", False):
+        st.subheader("Chat sobre os dados e relatório")
+
+        # --- 1) CSS: fixa o input no rodapé e evita sobreposição ---
+        st.markdown("""
+            <style>
+                /* Fixa a barra de input no rodapé da janela */
+                .stChatInputContainer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 999; /* fica por cima de tudo */
+                }
+                /* Dá espaço extra no fim da página para o input não cobrir as mensagens */
+                .block-container {
+                padding-bottom: 7rem; /* ajuste fino se quiser */
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # --- 3) Área do histórico (mais novas em cima) ---
+        chat_area = st.container()
+        with chat_area:
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+        # --- 4) Input SEMPRE no fim do script (mas fixado embaixo pelo CSS) ---
+        prompt = st.chat_input("Digite sua mensagem...")
+
+        # --- 5) Processa envio: insere no TOPO e reroda a app ---
+        if prompt:
+            # Mensagem do usuário no topo
+            st.session_state.messages.insert(0, {"role": "user", "content": prompt})
+            
+            # Monta contexto para API (dados + relatório + histórico do chat)
+            contexto = [
+                {"role": "system", "content": "Você é um analista de marketing de dados que responde sobre campanhas.Sempre responda em um texto estruturado em no máximo dois parágrafos."},
+                {"role": "assistant", "content": f"Dados disponíveis: {json.dumps(st.session_state['dados'], ensure_ascii=False)}"},
+            ] + st.session_state["messages"]
+
+            resp_chat = client.responses.create(
+                model="gpt-4.1-mini",
+                input=contexto
+            )
+
+            resp = resp_chat.output_text
+
+            # Resposta do assistente também no topo (acima da do user)
+            st.session_state.messages.insert(0, {"role": "assistant", "content": resp})
+
+            # Importante: reroda para redesenhar com o input lá embaixo e histórico atualizado
+            st.rerun()
 
 # =========================================================
 # ========== Run App =========

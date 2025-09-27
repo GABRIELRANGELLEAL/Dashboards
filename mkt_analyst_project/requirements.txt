@@ -6,3 +6,4 @@ streamlit_webrtc
 pydub
 tabulate
 facebook-business
+zipfile
