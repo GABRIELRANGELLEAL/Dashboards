@@ -9,6 +9,7 @@ import os
 from datetime import date
 from dotenv import load_dotenv, find_dotenv
 from  meta_adds_connect import insights_meta as im
+import urllib.parse
 
 _ = load_dotenv(find_dotenv(), override=True)
 
@@ -89,7 +90,8 @@ def to_bytesio_with_name(uploaded) -> io.BytesIO:
 # =========================================================
 
 def import_data():
-    st.subheader("Upload e Indexação")
+    # ========== upload files =========
+    st.subheader("Upload arquivo")
     vs = client.vector_stores.create(name="docs_sessao_local")
     #st.write("Vector Store criado:", vs.id)
     st.session_state["vs_id"] = vs.id  # só guarda o ID
@@ -134,54 +136,67 @@ def import_data():
                     pass
         st.write(f"Resumo: Sucesso={success} | Falhas={failed}")
     
-    ## faceadds connections
-
-    # 1) Monta a URL de autorização do Facebook (onde o usuário clica para logar/autorizar)
-    fb_auth_url = (
-        "https://www.facebook.com/v19.0/dialog/oauth"
-        f"?client_id={APP_ID}"             # ID do seu app no Facebook
-        f"&redirect_uri={REDIRECT_URI}"    # para onde o FB vai redirecionar depois do login
-        f"&scope=ads_read,ads_management"  # permissões solicitadas
+    # ========== FACE ADDS CONECTOR =========
+    st.subheader("Conexão direta")
+    # st.title("🔗 Conectar ao Facebook Ads")
+    REDIRECT_URI = "http://localhost:8501" # ajuste para sua URL pública quando em prod
+    # Monta a URL de login (OAuth2)
+    auth_url = (
+        f"https://www.facebook.com/v19.0/dialog/oauth?"
+        f"client_id={APP_ID}&redirect_uri={urllib.parse.quote(REDIRECT_URI)}&scope=ads_read"
     )
 
-    # 2) Se ainda não temos token salvo na sessão, mostramos o link de "Conectar"
+    # Se ainda não tem token → mostra botão de login
     if "fb_token" not in st.session_state:
-        # Link clicável para o login/consentimento no Facebook
-        st.markdown(f"[🔗 Conectar ao Facebook Ads]({fb_auth_url})", unsafe_allow_html=True)
+        auth_url = "https://www.facebook.com/v19.0/dialog/oauth?client_id=SEU_CLIENT_ID&redirect_uri=SUA_REDIRECT_URI&scope=ads_read"
+        st.markdown(
+            f"""
+            <style>
+            .fb-button {{
+                display: inline-block;
+                padding: 12px 24px;
+                font-size: 18px;
+                font-weight: bold;
+                color: white;
+                background-color: #1877F2; /* Azul do Facebook */
+                border: none;
+                border-radius: 8px;
+                text-align: center;
+                text-decoration: none;
+                transition: background-color 0.3s;
+            }}
+            .fb-button:hover {{
+                background-color: #145dbf;
+            }}
+            </style>
 
-        # 3) Ao voltar do Facebook, o navegador cai em REDIRECT_URI?code=...
-        #    Esse "code" vem como querystring; aqui a gente lê os query params.
+            <a href="{auth_url}" target="_blank" class="fb-button">
+                Conectar ao Facebook Ads
+            </a>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Captura o "code" que o Facebook devolve após login
         params = st.query_params
-        if "code" in params:               # só segue se o Facebook devolveu "code"
-            code = params["code"][0]       # pega o primeiro valor (é uma lista)
+        if "code" in params:
+            code = params["code"][0]
 
-            # 4) Troca o "code" por um access_token na API do Graph
+            # Troca o code por access_token
             token_url = (
-                "https://graph.facebook.com/v19.0/oauth/access_token"
-                f"?client_id={APP_ID}"
-                f"&redirect_uri={REDIRECT_URI}"
-                f"&client_secret={APP_SECRET}"
-                f"&code={code}"
+                f"https://graph.facebook.com/v19.0/oauth/access_token?"
+                f"client_id={APP_ID}&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
+                f"&client_secret={APP_SECRET}&code={code}"
             )
-
-            try:
-                # Chama a API para pegar o token
-                resp = requests.get(token_url).json()
-
-                # 5) Guarda o access_token na sessão do Streamlit
+            resp = requests.get(token_url).json()
+            if "access_token" in resp:
                 st.session_state["fb_token"] = resp["access_token"]
-
-                # Feedback visual para o usuário
-                st.success("✅ Conectado ao Facebook com sucesso!")
-            except Exception as e:
-                # Caso falhe (ex.: resp não tem "access_token" ou erro de rede)
-                st.error(f"Erro ao obter token: {e}")
-
+                st.success("✅ Conectado com sucesso!")
+            else:
+                st.error(f"Erro ao obter token: {resp}")
     else:
-        # 6) Se já temos token em sessão, só informamos o estado atual
         st.success("✅ Já conectado ao Facebook Ads")
-        # Mostra só um pedaço do token para o usuário confirmar que existe
-        st.write("Access Token (parcial):", st.session_state["fb_token"][:40], "...")
+        token = st.session_state["fb_token"]
 
 # =========================================================
 # ========== Aba Report e Insights =========
@@ -197,7 +212,7 @@ def create_report():
     if "show_dates" not in st.session_state:
         st.session_state.show_dates = False
     if "date_range" not in st.session_state:
-        st.session_state.date_range = {"start": None, "end": None}
+        st.session_state.date_range = {"start": None , "end": None}
 
     # Quando o botão é clicado, o Streamlit dá um "rerun".
     # Se o clique for detectado (True), ativamos o flag para mostrar os inputs.
@@ -206,6 +221,7 @@ def create_report():
 
     # Aqui renderizamos duas caixas de data lado a lado (colunas).
     # Também já salvamos os valores escolhidos no session_state.
+    # start, end = date.today(), date.today() 
     if st.session_state.show_dates:
         col1, col2 = st.columns(2)
         with col1:
