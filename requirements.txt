@@ -69,4 +69,5 @@ urllib3==2.0.5
 wcwidth @ file:///home/conda/feedstock_root/build_artifacts/wcwidth_1673864653149/work
 Werkzeug==2.2.3
 widgetsnbextension==4.0.9
-zipp @ file:///home/conda/feedstock_root/build_artifacts/zipp_1689374466814/work
+# zipp @ file:///home/conda/feedstock_root/build_artifacts/zipp_1689374466814/work
+moviepy
